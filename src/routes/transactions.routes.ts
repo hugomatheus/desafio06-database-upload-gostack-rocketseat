@@ -7,6 +7,7 @@ import TransactionsRepository from '../repositories/TransactionsRepository';
 import CreateTransactionService from '../services/CreateTransactionService';
 import DeleteTransactionService from '../services/DeleteTransactionService';
 import ImportTransactionsService from '../services/ImportTransactionsService';
+import ImportTransactionsServiceRocketseat from '../services/ImportTransactionsServiceRocketseat';
 
 const transactionsRouter = Router();
 const upload = multer(uploadConfig);
@@ -45,8 +46,12 @@ transactionsRouter.post(
   upload.single('file'),
   async (request, response) => {
     const filePath = request.file.path;
-    const importTransactionsService = new ImportTransactionsService();
-    const transactions = await importTransactionsService.execute(filePath);
+    // const importTransactionsService = new ImportTransactionsService();
+    // const transactions = await importTransactionsService.execute(filePath);
+    const importTransactionsServiceRocketseat = new ImportTransactionsServiceRocketseat();
+    const transactions = await importTransactionsServiceRocketseat.execute(
+      filePath,
+    );
     return response.json(transactions);
   },
 );

@@ -1,11 +1,12 @@
 import csvParse from 'csv-parse';
 import fs from 'fs';
 import { getCustomRepository, In } from 'typeorm';
-import { request } from 'express';
 import Transaction from '../models/Transaction';
 import csvParseConfig from '../config/csvParse';
 import CategoriesRepository from '../repositories/CategoriesRepository';
 import TransactionsRepository from '../repositories/TransactionsRepository';
+import Category from '../models/Category';
+import AppError from '../errors/AppError';
 
 interface CSVTransaction {
   title: string;
@@ -13,15 +14,29 @@ interface CSVTransaction {
   value: number;
   category: string;
 }
-class ImportTransactionsService {
-  async execute(filePath: string): Promise<Array<string>> {
-    const lines = await this.loadCSV(filePath);
+class ImportTransactionsServiceRocketseat {
+  async execute(filePath: string): Promise<Transaction[]> {
     const categoriesCSV: string[] = [];
     const transactionsCSV: CSVTransaction[] = [];
-    lines.forEach(line => {
+
+    const readCSVStream = fs.createReadStream(filePath);
+
+    const parseStream = csvParse(csvParseConfig);
+
+    const parseCSV = readCSVStream.pipe(parseStream);
+
+    parseCSV.on('data', async line => {
       const [title, type, value, category] = line;
+      if (!title || !type || !value) {
+        // throw new AppError('Error csv file.');
+        return;
+      }
       categoriesCSV.push(category);
       transactionsCSV.push({ title, type, value, category });
+    });
+
+    await new Promise(resolve => {
+      parseCSV.on('end', resolve);
     });
 
     const categoriesRepository = getCustomRepository(CategoriesRepository);
@@ -32,40 +47,35 @@ class ImportTransactionsService {
     });
 
     const categoriesTitleExists = categoriesExists.map(
-      category => category.title,
+      (category: Category) => category.title,
     );
 
-    const categoriestTitleNotExists = categoriesCSV.filter(
-      category => !categoriesTitleExists.includes(category),
+    const categoriestTitleNotExists = categoriesCSV
+      .filter(category => !categoriesTitleExists.includes(category))
+      .filter((value, index, self) => self.indexOf(value) === index);
+
+    const newCategories = categoriesRepository.create(
+      categoriestTitleNotExists.map(title => ({ title })),
     );
 
-    console.log('categoriestTitleNotExists');
-    console.log(categoriestTitleNotExists);
+    await categoriesRepository.save(newCategories);
+    const allCategories = [...categoriesExists, ...newCategories];
 
-    // await transactionsRepository.save(transaction);
+    const transactions = transactionsRepository.create(
+      transactionsCSV.map(transaction => ({
+        title: transaction.title,
+        type: transaction.type,
+        value: transaction.value,
+        category: allCategories.find(
+          category => category.title === transaction.category,
+        ),
+      })),
+    );
+    await transactionsRepository.save(transactions);
+    fs.promises.unlink(filePath);
 
-    return lines;
-  }
-
-  async loadCSV(filePath: string): any[] {
-    const readCSVStream = fs.createReadStream(filePath);
-
-    const parseStream = csvParse(csvParseConfig);
-
-    const parseCSV = readCSVStream.pipe(parseStream);
-
-    const lines = [];
-
-    parseCSV.on('data', line => {
-      lines.push(line);
-    });
-
-    await new Promise(resolve => {
-      parseCSV.on('end', resolve);
-    });
-
-    return lines;
+    return transactions;
   }
 }
 
-export default ImportTransactionsService;
+export default ImportTransactionsServiceRocketseat;
