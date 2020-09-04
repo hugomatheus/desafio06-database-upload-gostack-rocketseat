@@ -22,7 +22,7 @@ class Category {
   @UpdateDateColumn()
   updated_at: Date;
 
-  @OneToMany(() => Transaction, transaction => transaction.category) // note: we will create author property in the Photo class below
+  @OneToMany(() => Transaction, transaction => transaction.category)
   transactions: Transaction[];
 }
 
